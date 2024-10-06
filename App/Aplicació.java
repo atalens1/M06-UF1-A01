@@ -2,8 +2,13 @@ package App;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -13,6 +18,7 @@ import Model.Article;
 import Model.Encarrec;
 
 public class Aplicació {
+
 
     public static void main(String[] args) {
 
@@ -39,22 +45,20 @@ public class Aplicació {
     public static void DemanarOpcio() {
 
         boolean ValidOpt = true;
-
+        
         try (BufferedReader reader1 = new BufferedReader(new InputStreamReader(System.in))) {
-
             
             String opcio = reader1.readLine();
 
             switch (opcio) {
                 case "1":
                     System.out.println("opcio triada és 1");
-                    AfegirEncarrec(reader1);
-
+                    AfegirDadesEncarrec(reader1);
                     break;
 
                 case "2":
                     System.out.println("opcio triada és 2");
-
+                    MostrarEncarrec(reader1);
                     break;
                 
                 case "3":
@@ -67,8 +71,6 @@ public class Aplicació {
                     ValidOpt = false;
             }
 
-            System.out.println("opcio: "+ opcio);
-
             if (!(opcio.equals("3"))) {
 
                 String continuar = "";
@@ -78,7 +80,7 @@ public class Aplicació {
                     continuar = reader1.readLine(); 
                 }
 
-                if ((continuar.equals("S")) || (!(ValidOpt))) {
+                if ((continuar.matches("[Ss]")) || (!(ValidOpt))) {
                     
                     MainMenu();
 
@@ -99,7 +101,7 @@ public class Aplicació {
         } 
     }
 
-    public static void AfegirEncarrec(BufferedReader reader) throws IOException {
+    public static void AfegirDadesEncarrec(BufferedReader reader) throws IOException {
 
         System.out.println("Introdueix les dades de l'encarrec: ");
 
@@ -112,45 +114,23 @@ public class Aplicació {
         System.out.println("Per quin dia el vols preparat (Dia (DD)/ Mes (MM) / Any (AAAA)?: ");
         String dataEncarrec = reader.readLine();
 
-        ArrayList<Article> articles = new ArrayList<>();
+//Cridem a la classe encarregada de gestionar els articles dels encàrrecs        
+        GestioArticle articleList = new GestioArticle();
 
-        boolean addArticles = true;
+//Cridem al mètode de la classe que demana les dades per poder afegir els articles
+        ArrayList<Article> articles = articleList.AfegirArticles(reader);
 
-        while (addArticles) {
+//Fem l'escriptura als fitxers
+        EscriureFitxers(reader, nomCli, telCli, dataEncarrec, articles);
 
-            System.out.println("Quin article vols afegir?: ");
-            String nomArticle = reader.readLine();
-    
-            System.out.println("Quantitat: ");
+    }
 
-            float quantitat = 0;
+    public static void EscriureFitxers(BufferedReader reader, String nomCli, String telCli, String dataEncarrec, ArrayList<Article> articles) 
+        throws IOException {
 
-            try {
+        String extensio = "";
 
-                 quantitat = Float.parseFloat(reader.readLine());
-                
-            } catch (Exception e) {
-                System.out.println("Format de nombre no és vàlid");
-            } 
-            
-    
-            System.out.println("Quina unitat (indicar Kg, g, ... o simplement u per unitats)? :");
-            String unitat = reader.readLine();
-    
-            Article article = new Article(quantitat, unitat, nomArticle);
-    
-            articles.add(article);
-
-            System.out.println("Vols introduir cap article més? Si (S) per més afegir més: ");
-
-            if (!(reader.readLine().equals("S"))) {
-                addArticles = false;
-            }
-
-        }
-
-
-        String fileName = "C:\\Users\\accesadades\\" + "encarrecs_client_" + nomCli + "_"+ System.currentTimeMillis() + ".csv";
+        String fileName = "C:\\Users\\accesadades\\" + "encarrecs_client_" + nomCli + "_"+ System.currentTimeMillis() + extensio;
 
         System.out.println("En quin format vols escriure el fitxer?: ");
         System.out.println("1. text albarà");
@@ -161,17 +141,22 @@ public class Aplicació {
 
         switch (tipusFich) {
             case "1":
+                extensio = ".txt";
+                fileName = fileName.concat(extensio);
                 TextMultiLinea(nomCli,telCli,dataEncarrec,articles,fileName);
                 break;
             
             case "2": 
                 // Encarrec encarrec = new Encarrec(nomCli, telCli, dataEncarrec, articles);
                 // csvLineaObjEn(encarrec, fileName);
+                extensio = ".csv";
+                fileName = fileName.concat(extensio);
                 csvLinea(nomCli,telCli,dataEncarrec,articles,fileName);
                 break;
 
             case "3":
-
+                extensio = ".dat";
+                fileName = fileName.concat(extensio);
                 binari(nomCli,telCli,dataEncarrec,articles,fileName);
                 break;
         
@@ -181,7 +166,123 @@ public class Aplicació {
 
     }
 
+    public static void MostrarEncarrec(BufferedReader reader) throws IOException {
+
+        String folder = "C:\\Users\\accesadades\\";
+
+        System.out.println("Quin tipus de fitxer voleu obrir?");
+        System.out.println("1. Fitxer .csv");
+        System.out.println("2. Fitxer binari .dat");
+
+        String opcio = reader.readLine();
+        
+        System.out.println("Especifiqueu el nom del fitxer (i sols el nom) que voleu obrir sense la seva extensió");
+        System.out.println("Assegureu que el fitxer està a la carpeta: " + folder);
+
+        String fileName = reader.readLine();
+
+        if (opcio.equals("1")) {
+            FormatCSV(folder, fileName);
+        } else if (opcio.equals("2")) {
+            FormatBinari(folder, fileName);
+        }
+
+    }
+
+    public static void FormatCSV(String folder, String fileName) {
+        String filInputName = folder + fileName + ".csv";
+
+        try (BufferedReader bwfilInp = new BufferedReader(new FileReader(filInputName))) {
+
+            String linea = "";
+            String[] contingut;
+
+            while ((linea = bwfilInp.readLine()) != null){
+
+                contingut = linea.split(";", 0);
+                String nomCli = contingut[0];
+                String telCli = contingut[1];
+                String dataEncarrec = contingut[2];
+
+                ArrayList<Article> articles = new ArrayList<>();
+
+                int j = 3;
+
+                while (j < contingut.length) {
+                    Article a1 = new Article();
+                    a1.setNomArticle(contingut[j]);
+                    j++;
+                    a1.setnombreUnitats(Float.parseFloat(contingut[j]));
+                    j++;
+                    a1.settipusUnitat(contingut[j]);
+                    articles.add(a1);
+                    j++;
+                }
+
+                FormatEncarrec(nomCli, telCli, dataEncarrec,articles);
+            } 
+
+        } catch (FileNotFoundException fn) {
+                System.out.println ("No es troba el fitxer");         
+        } catch (IOException io) {
+        System.out.println ("Error d'E/S"); 
+        }
+    }
+
+    public static void FormatBinari(String folder, String fileName) {
+
+        String filInputName = folder + fileName + ".dat";
+        ArrayList<Article> articles = new ArrayList<>();
+
+        try (DataInputStream diStr1 = new DataInputStream(new FileInputStream(filInputName))) {
+
+            String nomCli = diStr1.readUTF();
+            String telCli = diStr1.readUTF();
+            String dataEncarrec = diStr1.readUTF();
+
+            try{
+
+                while (diStr1.available()>0) {
+                    String nomArticle = diStr1.readUTF();
+                    float quantitat = diStr1.readFloat();
+                    String unitat = diStr1.readUTF();
+                    Article art = new Article(nomArticle,quantitat,unitat);
+                    articles.add(art);   
+                }
+
+                FormatEncarrec(nomCli, telCli, dataEncarrec,articles);
+
+            } catch (EOFException e) {
+                System.out.println("Final de fitxer");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    public static void FormatEncarrec(String nomCli, String telCli, String dataEncarrec, ArrayList<Article> articles) {
+        System.out.printf(String.format("%n"));
+        System.out.println("DETALL DE L'ENCARREC");
+        System.out.println("====================================================");
+        System.out.printf(String.format("%n"));
+        System.out.println("Nom del client: " + nomCli);
+        System.out.println("Telefon del client: " + telCli);
+        System.out.println("Data de l'encarrec: " + dataEncarrec);
+        System.out.printf(String.format("%n"));
+        System.out.printf(String.format("%-15s %-10s %-15s%n", "Quantitat","Unitats","Article"));
+        System.out.printf(String.valueOf("=").repeat(15)+" " +String.valueOf("=").repeat(10)+" "+String.valueOf("=").repeat(15));
+        for (Article article:articles) {
+            System.out.printf(String.format("%n"));
+            System.out.printf(String.format("%-15s %-10s %-15s%n",article.getnombreUnitats(),article.gettipusUnitat(),article.getNomArticle()));
+        }
+    }
+
     public static void TextMultiLinea(String nomCli, String telCli, String dataEncarrec, ArrayList<Article> articles, String fileName) {
+    /* Aquest mètode s'encarrega d'agafar els detalls de l'encarrec i formatar-lo a un fitxer pla,
+     * el qual no és un csv sinó una mena de comprovant pel client
+     */
 
         try (BufferedWriter bw1 = new BufferedWriter(new FileWriter(fileName))) {
             
@@ -206,6 +307,8 @@ public class Aplicació {
     }
 
     public static void csvLinea(String nomCli, String telCli, String dataEncarrec, ArrayList<Article> articles, String fileName) {
+    /* Aquest mètode s'encarrega d'agafar els detalls de l'encarrec i formatar-lo a un fitxer pla separat per comes (csv)
+     */
         try (BufferedWriter bw1 = new BufferedWriter(new FileWriter(fileName))){
 
             String csvArticles = "";
@@ -229,6 +332,9 @@ public class Aplicació {
     }
 
     public static void csvLineaObjEn(Encarrec encarrec, String fileName) {
+    /* Aquest mètode és una alternativa per si es fa servir una classe anomenada Encarrec, la qual 
+     * fa servir la classe Article
+     */
         try (BufferedWriter bw1 = new BufferedWriter(new FileWriter(fileName))){
 
             bw1.write(encarrec.toCSV());
@@ -240,6 +346,8 @@ public class Aplicació {
 
 
     public static void binari (String nomCli, String telCli, String dataEncarrec, ArrayList<Article> articles, String fileName) {
+    /* Aquest mètode s'encarrega d'agafar els detalls de l'encarrec i formatar-lo a un fitxer binari
+     */
 
         try (DataOutputStream ds1 = new DataOutputStream(new FileOutputStream(fileName))) {
 
